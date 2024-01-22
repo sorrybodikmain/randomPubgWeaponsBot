@@ -56,7 +56,7 @@ def get_inventory_message(player, inventory_player):
         f"Зброя 2: **{inventory_player['weapon_2']}**\n"
         f"Зброя, яку дозволено для свапу з дропу: **{inventory_player['drop_weapon']}**\n"
         f"Предмет для свапу: **{inventory_player['swap_item']}** "
-        f"(Кількість: {inventory_player['swap_item_quantity']})\n \n"
+        f"(Кількість: {inventory_player['swap_item_quantity']})"
     )
 
 
@@ -70,7 +70,7 @@ async def generate_inventory_command(ctx, players):
     message = ''
     for player in players.split(','):
         inventory_player = generate_inventory()
-        message.join(get_inventory_message(player, inventory_player))
+        message += get_inventory_message(player, inventory_player)
 
         preset_data = {'player': player, 'inventory': inventory_player}
         oldUser = presets_collection.find_one({'player': player})
@@ -109,8 +109,8 @@ async def change_weapon_command(ctx, player, slot):
 
 
 @bot.command(name='ci', help='Clear inventory by username')
-async def change_weapon_command(ctx, player):
-    presets_collection.delete_one({'player': player})
+async def change_weapon_command(ctx, players):
+    presets_collection.delete_many({'player': players.split(',')})
     await ctx.send(f"Інвентар очищено успішно!")
 
 
