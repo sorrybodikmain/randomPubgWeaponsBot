@@ -56,7 +56,7 @@ def get_inventory_message(player, inventory_player):
         f"Зброя 2: **{inventory_player['weapon_2']}**\n"
         f"Зброя, яку дозволено для свапу з дропу: **{inventory_player['drop_weapon']}**\n"
         f"Предмет для свапу: **{inventory_player['swap_item']}** "
-        f"(Кількість: {inventory_player['swap_item_quantity']})"
+        f"(Кількість: {inventory_player['swap_item_quantity']})\n \n"
     )
 
 
@@ -67,9 +67,10 @@ async def on_ready():
 
 @bot.command(name='gi', help='Generate PUBG inventory for a player')
 async def generate_inventory_command(ctx, players):
+    message = ''
     for player in players.split(','):
         inventory_player = generate_inventory()
-        await ctx.send(get_inventory_message(player, inventory_player))
+        message.join(get_inventory_message(player, inventory_player))
 
         preset_data = {'player': player, 'inventory': inventory_player}
         oldUser = presets_collection.find_one({'player': player})
@@ -80,6 +81,7 @@ async def generate_inventory_command(ctx, players):
             )
         else:
             presets_collection.insert_one(preset_data)
+    await ctx.send(message)
 
 
 @bot.command(name='cw', help='Change a weapon slot for a player')
