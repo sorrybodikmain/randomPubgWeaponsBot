@@ -1,72 +1,25 @@
+import discord
 from discord.ext import commands
+from discord_slash import SlashCommand
+from pymongo import MongoClient
 import random
+import json
 
-bot = commands.Bot(command_prefix='!')
+intents = discord.Intents.default()
+intents.message_content = True
 
-weapons = [
-    # Штурмові гвинтівки
-    "M16A4",
-    "M416",
-    "SCAR-L",
-    "G36C",
-    "QBZ95",
-    "AK-47",
-    "Honey Badger",
-    "AUG",
-    # Марксманські гвинтівки
-    "SKS",
-    "Mk14 EBR",
-    "SLR",
-    "VSS",
-    "Mini14",
-    # Снайперські гвинтівки
-    "M24",
-    "AWM",
-    "Kar98K",
-    # Пістолети-кулемети
-    "Vector",
-    "UMP9",
-    "MP5K",
-    "PP-19 Bizon",
-    "Tommy Gun",
-    # Пістолети
-    "P92",
-    "P1911",
-    "R1895",
-    "Deagle",
-    "Glock 18",
-    # Озброєння ближнього бою
-    "Sawed-off",
-    "Double Barrel",
-    "Machete",
-    "Pan",
-    # Метальна зброя
-    "Crossbow",
-    "Flare Gun",
-    # Інше
-    "Throwables",
-]
+bot = commands.Bot(command_prefix='!', intents=intents)
 
-swap_items = [
-    "Шолом 1",
-    "Шолом 2",
-    "Шолом 3",
-    "Жилет",
-    "Жилет 1",
-    "Жилет 2",
-    "Жилет 3",
-    # Медичні приналежності
-    "Пакет першої допомоги",
-    "Медичний набір",
-    "Таблетки від болю",
-    "Енергетичний напій",
-    # Інше
-    "Димна граната",
-    "Молотов коктейль",
-    "С4",
-    "Граната з удушаючим газом",
-    "Коробка з повітрям",
-]
+slash = SlashCommand(bot)
+
+weapons = json.load(open('./weapons.json', encoding='utf-8'))
+
+swap_items = json.load(open('./swap_items.json', encoding='utf-8'))
+
+# Підключення до MongoDB
+client = MongoClient('mongodb://localhost:27017/')
+db = client['pubg_inventory']
+presets_collection = db['presets']
 
 
 def generate_inventory():
@@ -74,7 +27,7 @@ def generate_inventory():
 
     inventory["weapon_1"] = random.choice(weapons)
     inventory["weapon_2"] = random.choice(weapons)
-    inventory["swap_item"] = random.choice(swap_items)
+    inventory["swap_item"] = random.choice(["затиск", "пристрій", "голограма"])
     inventory["swap_item_quantity"] = random.randint(0, 10)
 
     return inventory
@@ -85,9 +38,10 @@ async def on_ready():
     print(f'Logged in as {bot.user.name}')
 
 
-@bot.command(name='generate_inventory', help='Generate PUBG inventory for a player')
-async def generate_inventory_command(ctx, *players):
-    for player in players:
+# Створення інвентарю та збереження його в MongoDB для кожного гравця
+@slash.slash(name='generate_inventory', description='Generate PUBG inventory for players')
+async def generate_inventory_command(ctx, players: commands.Param(str, desc="List of players")):
+    for player in players.split():
         inventory_player = generate_inventory()
         inventory_message = (
             f"\nІм'я гравця: {player}\n"
@@ -98,9 +52,18 @@ async def generate_inventory_command(ctx, *players):
         )
         await ctx.send(inventory_message)
 
+        # Збереження пресету в MongoDB
+        preset_data = {
+            'player': player,
+            'inventory': inventory_player
+        }
+        presets_collection.insert_one(preset_data)
 
-@bot.command(name='change_weapon', help='Change a weapon slot for a player')
-async def change_weapon_command(ctx, player, slot):
+
+# Зміна одного слоту зброї та оновлення пресету в MongoDB
+@slash.slash(name='change_weapon', description='Change a weapon slot for a player')
+async def change_weapon_command(ctx, player: commands.Param(str, desc="Player's name"),
+                                slot: commands.Param(int, desc="Weapon slot (1 or 2)")):
     inventory_player = generate_inventory()
     current_weapon = inventory_player[f'weapon_{slot}']
     new_weapon = random.choice(weapons)
@@ -115,5 +78,7 @@ async def change_weapon_command(ctx, player, slot):
     await ctx.send(f"Оружіе для {player} у слоті {slot} було змінено з {current_weapon} на {new_weapon}")
     await ctx.send(inventory_message)
 
+    presets_collection.update_one({'player': player}, {'$set': {'inventory': inventory_player}})
 
-bot.run('YOUR_BOT_TOKEN')
+
+bot.run('MTE5ODkzMDY3NDE4NzUxMzk2OA.GS7j9c.IDL8sM_Pywe4qxBoEgCdXI8qy0bISDWT-BGguA')
