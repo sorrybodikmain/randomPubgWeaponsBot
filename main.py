@@ -7,7 +7,7 @@ import json
 
 config = dotenv_values(".env")
 
-intents = discord.Intents.default()
+intents = discord.Intents.all()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -27,12 +27,12 @@ def generate_swap_item():
     return [swap_item[0], swap_item_quantity]
 
 
-def generate_inventory():
+def generate_new_inventory():
     first_weapon = random.choice(weapons)
     second_weapon = random.choice(weapons)
     drop_weapon = random.choice(drop_weapons)
 
-    if second_weapon is second_weapon:
+    if first_weapon is second_weapon:
         second_weapon = random.choice(weapons)
 
     if drop_weapon is [first_weapon, second_weapon]:
@@ -54,22 +54,23 @@ def get_inventory_message(player, inventory_player):
         f"\n ```Ім'я гравця: {player}```\n"
         f"Зброя 1: **{inventory_player['weapon_1']}**\n"
         f"Зброя 2: **{inventory_player['weapon_2']}**\n"
-        f"Зброя, яку дозволено для свапу з дропу: **{inventory_player['drop_weapon']}**\n"
-        f"Предмет для свапу: **{inventory_player['swap_item']}** "
+        f"Зброя 'дропова': **{inventory_player['drop_weapon']}**\n"
+        f"Предмет для свапу: **{inventory_player['swap_item']}** \n"
         f"(Кількість: {inventory_player['swap_item_quantity']})"
     )
 
 
 @bot.event
 async def on_ready():
+    await bot.tree.sync()
     print(f'Logged in as {bot.user.name}')
 
 
-@bot.command(name='gi', help='Generate PUBG inventory for a player')
-async def generate_inventory_command(ctx, players):
+@bot.hybrid_command(name='generate_inventory', description='Generate PUBG inventory for a player')
+async def generate_inventory(ctx, players: str) -> None:
     message = ''
     for player in players.split(','):
-        inventory_player = generate_inventory()
+        inventory_player = generate_new_inventory()
         message += get_inventory_message(player, inventory_player)
 
         preset_data = {'player': player, 'inventory': inventory_player}
@@ -79,15 +80,17 @@ async def generate_inventory_command(ctx, players):
                 {'player': player},
                 {'$set': {'inventory': inventory_player}}
             )
+            print(f"Updated inventory for {player} ({inventory_player['weapon_1']}, {inventory_player['weapon_2']})")
         else:
             presets_collection.insert_one(preset_data)
+            print(f"Created new inventory for {player} ({inventory_player['weapon_1']}, {inventory_player['weapon_2']})")
     await ctx.send(message)
 
 
-@bot.command(name='cw', help='Change a weapon slot for a player')
-async def change_weapon_command(ctx, player, slot):
+@bot.hybrid_command(name='change_weapon', description='Change a weapon slot for a player')
+async def change_weapon(ctx, player: str, slot: int) -> None:
     default_inventory = presets_collection.find_one({'player': player})['inventory']
-    inventory_player = generate_inventory()
+    inventory_player = generate_new_inventory()
     if default_inventory is not None:
         inventory_player = default_inventory
     current_weapon = inventory_player[f'weapon_{slot}']
@@ -101,17 +104,22 @@ async def change_weapon_command(ctx, player, slot):
     if default_inventory is not None:
         await ctx.send(
             f"Оружіе для **{player}** у слоті {slot} було змінено з ~~{current_weapon}~~ на **{new_weapon}**")
+        print(f"Changed weapon for {player} from {current_weapon} to {new_weapon}\n")
     else:
-        await ctx.send(f"Зміни оружія не було, користувача не знайдено!")
+        await ctx.send(f"Зміни оружія не було, користувача не знайдено! Згенеровано новий інвентар")
+        presets_collection.insert_one({'player': player, 'inventory': inventory_player})
+        print(
+            f"Created new inventory for {player} from cw func ({inventory_player['weapon_1']}, {inventory_player['weapon_2']})\n")
     await ctx.send(get_inventory_message(player, inventory_player))
 
-    presets_collection.update_one({'player': player}, {'$set': {'inventory': inventory_player}})
+    if default_inventory is not None:
+        presets_collection.update_one({'player': player}, {'$set': {'inventory': inventory_player}})
 
 
-@bot.command(name='ci', help='Clear inventory by username')
-async def change_weapon_command(ctx, players):
+@bot.hybrid_command(name='clear_inventory', description='Clear inventory by usernames')
+async def clear_inventory(ctx, players: str) -> None:
     presets_collection.delete_many({'player': players.split(',')})
-    await ctx.send(f"Інвентар очищено успішно!")
+    await ctx.send(f"Інвентар/і очищено успішно!")
 
 
 bot.run(config['BOT_KEY'])
