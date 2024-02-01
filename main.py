@@ -144,4 +144,9 @@ async def clear_inventory(ctx, players: str) -> None:
     await ctx.send(f"Інвентар/і очищено успішно!")
 
 
+@bot.hybrid_command(name='generate_random_word', description='Generate random word by comma separator')
+async def generate_random_word(ctx, words: str) -> None:
+    await ctx.send(f"Вибір для {ctx.message.author.mention}, впав на {random.choice(words.split(','))}")
+
+
 bot.run(config['BOT_KEY'])
